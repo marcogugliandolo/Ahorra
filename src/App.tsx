@@ -16,7 +16,9 @@ import {
   HeartPulse,
   MoreHorizontal,
   Loader2,
-  BarChart3
+  BarChart3,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -52,7 +54,24 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [activeChartTab, setActiveChartTab] = useState<'categories' | 'trend'>('categories');
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' || 
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
   
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
   // Form states
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
@@ -188,30 +207,39 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-stone-50">
+      <div className="flex items-center justify-center h-screen bg-stone-50 dark:bg-stone-950">
         <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 font-sans pb-20">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans pb-20 transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-10 px-4 py-4 sm:px-6">
+      <header className="bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 sticky top-0 z-10 px-4 py-4 sm:px-6">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-600 rounded-xl text-white">
               <Wallet size={24} />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">AhorraPro</h1>
+            <h1 className="text-xl font-bold tracking-tight">Ahorra</h1>
           </div>
-          <button 
-            onClick={() => setShowExpenseForm(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full flex items-center gap-2 transition-all shadow-sm active:scale-95"
-          >
-            <Plus size={20} />
-            <span className="hidden sm:inline">Nuevo Gasto</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors"
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            <button 
+              onClick={() => setShowExpenseForm(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            >
+              <Plus size={20} />
+              <span className="hidden sm:inline">Nuevo Gasto</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -221,32 +249,32 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-red-50 text-red-600 rounded-xl">
+              <div className="p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl">
                 <TrendingUp size={18} />
               </div>
-              <span className="text-stone-500 text-xs font-bold uppercase tracking-wider">Gasto Total</span>
+              <span className="text-stone-500 dark:text-stone-400 text-xs font-bold uppercase tracking-wider">Gasto Total</span>
             </div>
-            <div className="text-2xl font-bold tracking-tight">{totalExpenses.toLocaleString()}€</div>
-            <div className="text-stone-400 text-[10px] mt-1 font-medium">Desde el inicio</div>
+            <div className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{totalExpenses.toLocaleString()}€</div>
+            <div className="text-stone-400 dark:text-stone-500 text-[10px] mt-1 font-medium">Desde el inicio</div>
           </motion.div>
 
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+              <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
                 <Calendar size={18} />
               </div>
-              <span className="text-stone-500 text-xs font-bold uppercase tracking-wider">Este Mes</span>
+              <span className="text-stone-500 dark:text-stone-400 text-xs font-bold uppercase tracking-wider">Este Mes</span>
             </div>
-            <div className="text-2xl font-bold tracking-tight">{monthlyExpenses.toLocaleString()}€</div>
-            <div className="text-stone-400 text-[10px] mt-1 font-medium capitalize">
+            <div className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{monthlyExpenses.toLocaleString()}€</div>
+            <div className="text-stone-400 dark:text-stone-500 text-[10px] mt-1 font-medium capitalize">
               {format(new Date(selectedYear, selectedMonth), 'MMMM yyyy', { locale: es })}
             </div>
           </motion.div>
@@ -255,23 +283,23 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white p-5 rounded-3xl border border-stone-200/60 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-xl">
                 <Target size={18} />
               </div>
-              <span className="text-stone-500 text-xs font-bold uppercase tracking-wider">Metas Activas</span>
+              <span className="text-stone-500 dark:text-stone-400 text-xs font-bold uppercase tracking-wider">Metas Activas</span>
             </div>
-            <div className="text-2xl font-bold tracking-tight">{goals.length}</div>
-            <div className="text-stone-400 text-[10px] mt-1 font-medium">Objetivos de ahorro</div>
+            <div className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{goals.length}</div>
+            <div className="text-stone-400 dark:text-stone-500 text-[10px] mt-1 font-medium">Objetivos de ahorro</div>
           </motion.div>
 
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="bg-emerald-600 text-white p-5 rounded-3xl shadow-lg shadow-emerald-100 flex flex-col justify-between group cursor-pointer"
+            className="bg-emerald-600 text-white p-5 rounded-3xl shadow-lg shadow-emerald-100 dark:shadow-emerald-900/20 flex flex-col justify-between group cursor-pointer"
             onClick={() => setShowExpenseForm(true)}
           >
             <div className="flex items-center justify-between">
@@ -287,22 +315,22 @@ export default function App() {
           {/* Main Content Area */}
           <div className="lg:col-span-8 space-y-8">
             {/* Charts & Visualization */}
-            <div className="bg-white p-8 rounded-[2rem] border border-stone-200/60 shadow-sm">
+            <div className="bg-white dark:bg-stone-900 p-8 rounded-[2rem] border border-stone-200/60 dark:border-stone-800 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                 <div>
-                  <h3 className="text-xl font-bold tracking-tight">
+                  <h3 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
                     {activeChartTab === 'categories' ? 'Distribución de Gastos' : 'Tendencia de Gastos'}
                   </h3>
-                  <p className="text-stone-400 text-sm">
+                  <p className="text-stone-400 dark:text-stone-500 text-sm">
                     {activeChartTab === 'categories' ? 'Análisis visual por categorías' : 'Gastos totales últimos 12 meses'}
                   </p>
                 </div>
-                <div className="flex bg-stone-100 p-1 rounded-xl self-start">
+                <div className="flex bg-stone-100 dark:bg-stone-800 p-1 rounded-xl self-start">
                   <button 
                     onClick={() => setActiveChartTab('categories')}
                     className={cn(
                       "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                      activeChartTab === 'categories' ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"
+                      activeChartTab === 'categories' ? "bg-white dark:bg-stone-700 shadow-sm text-stone-900 dark:text-stone-100" : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
                     )}
                   >
                     Categorías
@@ -311,7 +339,7 @@ export default function App() {
                     onClick={() => setActiveChartTab('trend')}
                     className={cn(
                       "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                      activeChartTab === 'trend' ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"
+                      activeChartTab === 'trend' ? "bg-white dark:bg-stone-700 shadow-sm text-stone-900 dark:text-stone-100" : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
                     )}
                   >
                     Tendencia
@@ -341,14 +369,21 @@ export default function App() {
                               ))}
                             </Pie>
                             <Tooltip 
-                              contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', padding: '12px' }}
+                              contentStyle={{ 
+                                borderRadius: '16px', 
+                                border: 'none', 
+                                boxShadow: '0 10px 25px rgba(0,0,0,0.05)', 
+                                padding: '12px',
+                                backgroundColor: darkMode ? '#1c1917' : '#ffffff',
+                                color: darkMode ? '#f5f5f4' : '#1c1917'
+                              }}
                               itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                               formatter={(value: number) => [`${value.toLocaleString()}€`, 'Total']}
                             />
                           </PieChart>
                         </ResponsiveContainer>
                       ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-stone-300 gap-2">
+                        <div className="h-full flex flex-col items-center justify-center text-stone-300 dark:text-stone-700 gap-2">
                           <PieChartIcon size={48} strokeWidth={1} />
                           <span className="text-sm italic">Sin datos suficientes</span>
                         </div>
@@ -360,12 +395,12 @@ export default function App() {
                         <div key={i} className="flex items-center justify-between group">
                           <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                            <span className="text-sm font-medium text-stone-600 group-hover:text-stone-900 transition-colors">{cat.name}</span>
+                            <span className="text-sm font-medium text-stone-600 dark:text-stone-400 group-hover:text-stone-900 dark:group-hover:text-stone-100 transition-colors">{cat.name}</span>
                           </div>
-                          <div className="text-sm font-bold">{cat.value.toLocaleString()}€</div>
+                          <div className="text-sm font-bold text-stone-900 dark:text-stone-100">{cat.value.toLocaleString()}€</div>
                         </div>
                       )) : (
-                        <div className="text-stone-400 text-xs text-center">Registra gastos para ver el desglose</div>
+                        <div className="text-stone-400 dark:text-stone-500 text-xs text-center">Registra gastos para ver el desglose</div>
                       )}
                     </div>
                   </div>
@@ -377,15 +412,22 @@ export default function App() {
                           dataKey="name" 
                           axisLine={false} 
                           tickLine={false} 
-                          tick={{ fontSize: 10, fontWeight: 'bold', fill: '#a8a29e' }}
+                          tick={{ fontSize: 10, fontWeight: 'bold', fill: darkMode ? '#78716c' : '#a8a29e' }}
                           dy={10}
                         />
                         <YAxis hide />
                         <Tooltip 
-                          cursor={{ fill: '#f5f5f4', radius: 12 }}
-                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', padding: '12px' }}
+                          cursor={{ fill: darkMode ? '#292524' : '#f5f5f4', radius: 12 }}
+                          contentStyle={{ 
+                            borderRadius: '16px', 
+                            border: 'none', 
+                            boxShadow: '0 10px 25px rgba(0,0,0,0.05)', 
+                            padding: '12px',
+                            backgroundColor: darkMode ? '#1c1917' : '#ffffff',
+                            color: darkMode ? '#f5f5f4' : '#1c1917'
+                          }}
                           itemStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#059669' }}
-                          labelStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#a8a29e', marginBottom: '4px' }}
+                          labelStyle={{ fontSize: '10px', fontWeight: 'bold', color: darkMode ? '#78716c' : '#a8a29e', marginBottom: '4px' }}
                           labelFormatter={(label, payload) => payload[0]?.payload?.fullDate || label}
                           formatter={(value: number) => [`${value.toLocaleString()}€`, 'Gasto']}
                         />
@@ -405,7 +447,7 @@ export default function App() {
             {/* Savings Goals - Refined Grid */}
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
-                <h3 className="text-xl font-bold tracking-tight">Metas de Ahorro</h3>
+                <h3 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">Metas de Ahorro</h3>
                 <button 
                   onClick={() => setShowGoalForm(true)}
                   className="text-emerald-600 hover:text-emerald-700 text-sm font-bold flex items-center gap-1.5"
@@ -421,22 +463,22 @@ export default function App() {
                     <motion.div 
                       layout
                       key={goal.id} 
-                      className="bg-white p-6 rounded-3xl border border-stone-200/60 shadow-sm space-y-4"
+                      className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm space-y-4"
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="font-bold text-stone-800">{goal.name}</h4>
-                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-0.5">
+                          <h4 className="font-bold text-stone-800 dark:text-stone-200">{goal.name}</h4>
+                          <p className="text-[10px] text-stone-400 dark:text-stone-500 font-bold uppercase tracking-widest mt-0.5">
                             {goal.deadline ? format(parseISO(goal.deadline), 'dd MMM yyyy', { locale: es }) : 'Sin fecha'}
                           </p>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-black text-emerald-600">{Math.round(progress)}%</div>
+                          <div className="text-sm font-black text-emerald-600 dark:text-emerald-500">{Math.round(progress)}%</div>
                         </div>
                       </div>
                       
                       <div className="space-y-2">
-                        <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden">
+                        <div className="h-2.5 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${progress}%` }}
@@ -444,21 +486,21 @@ export default function App() {
                           />
                         </div>
                         <div className="flex justify-between text-[11px] font-bold">
-                          <span className="text-stone-400">{goal.current_amount.toLocaleString()}€</span>
-                          <span className="text-stone-800">Objetivo: {goal.target_amount.toLocaleString()}€</span>
+                          <span className="text-stone-400 dark:text-stone-500">{goal.current_amount.toLocaleString()}€</span>
+                          <span className="text-stone-800 dark:text-stone-200">Objetivo: {goal.target_amount.toLocaleString()}€</span>
                         </div>
                       </div>
 
                       <div className="flex gap-2 pt-2">
                         <button 
                           onClick={() => handleUpdateGoalProgress(goal.id, goal.current_amount, 50)}
-                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-stone-50 text-stone-500 hover:bg-emerald-50 hover:text-emerald-600 transition-all"
+                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all"
                         >
                           +50€
                         </button>
                         <button 
                           onClick={() => handleUpdateGoalProgress(goal.id, goal.current_amount, 100)}
-                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-stone-50 text-stone-500 hover:bg-emerald-50 hover:text-emerald-600 transition-all"
+                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all"
                         >
                           +100€
                         </button>
@@ -466,7 +508,7 @@ export default function App() {
                     </motion.div>
                   );
                 }) : (
-                  <div className="col-span-2 bg-stone-100/50 border-2 border-dashed border-stone-200 rounded-[2rem] py-12 flex flex-col items-center justify-center text-stone-400 gap-3">
+                  <div className="col-span-2 bg-stone-100/50 dark:bg-stone-900/50 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-[2rem] py-12 flex flex-col items-center justify-center text-stone-400 dark:text-stone-600 gap-3">
                     <Target size={40} strokeWidth={1} />
                     <p className="text-sm font-medium italic">Establece tu primera meta de ahorro</p>
                   </div>
@@ -477,11 +519,11 @@ export default function App() {
 
           {/* Sidebar Area */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white p-6 rounded-[2rem] border border-stone-200/60 shadow-sm flex flex-col h-full max-h-[800px]">
+            <div className="bg-white dark:bg-stone-900 p-6 rounded-[2rem] border border-stone-200/60 dark:border-stone-800 shadow-sm flex flex-col h-full max-h-[800px]">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold tracking-tight">Gastos</h3>
-                  <div className="p-1.5 bg-stone-50 rounded-lg text-stone-400">
+                  <h3 className="text-lg font-bold tracking-tight text-stone-900 dark:text-stone-100">Gastos</h3>
+                  <div className="p-1.5 bg-stone-50 dark:bg-stone-800 rounded-lg text-stone-400 dark:text-stone-500">
                     <TrendingDown size={16} />
                   </div>
                 </div>
@@ -490,7 +532,7 @@ export default function App() {
                   <select 
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                    className="flex-1 bg-stone-50 border-none rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
+                    className="flex-1 bg-stone-50 dark:bg-stone-800 border-none rounded-xl px-3 py-2 text-xs font-bold text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
                   >
                     {Array.from({ length: 12 }).map((_, i) => (
                       <option key={i} value={i}>
@@ -501,7 +543,7 @@ export default function App() {
                   <select 
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="bg-stone-50 border-none rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
+                    className="bg-stone-50 dark:bg-stone-800 border-none rounded-xl px-3 py-2 text-xs font-bold text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
                   >
                     {Array.from({ length: 5 }).map((_, i) => {
                       const year = new Date().getFullYear() - 2 + i;
@@ -518,7 +560,7 @@ export default function App() {
                     <motion.div 
                       layout
                       key={expense.id}
-                      className="flex items-center justify-between p-3 hover:bg-stone-50 rounded-2xl transition-all group"
+                      className="flex items-center justify-between p-3 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-2xl transition-all group"
                     >
                       <div className="flex items-center gap-3">
                         <div 
@@ -528,15 +570,15 @@ export default function App() {
                           <Icon size={16} />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-xs truncate text-stone-800">{expense.description || expense.category_name}</div>
-                          <div className="text-[10px] text-stone-400 font-medium">{format(parseISO(expense.date), 'dd MMM', { locale: es })}</div>
+                          <div className="font-bold text-xs truncate text-stone-800 dark:text-stone-200">{expense.description || expense.category_name}</div>
+                          <div className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">{format(parseISO(expense.date), 'dd MMM', { locale: es })}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="font-black text-xs text-red-500">-{expense.amount.toLocaleString()}€</div>
+                        <div className="font-black text-xs text-red-500 dark:text-red-400">-{expense.amount.toLocaleString()}€</div>
                         <button 
                           onClick={() => handleDeleteExpense(expense.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-300 hover:text-red-500 transition-all"
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-300 dark:text-stone-600 hover:text-red-500 dark:hover:text-red-400 transition-all"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -544,7 +586,7 @@ export default function App() {
                     </motion.div>
                   );
                 }) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-stone-300 gap-2">
+                  <div className="flex flex-col items-center justify-center py-20 text-stone-300 dark:text-stone-700 gap-2">
                     <Wallet size={32} strokeWidth={1} />
                     <p className="text-xs italic">Sin gastos en este periodo</p>
                   </div>
@@ -552,7 +594,7 @@ export default function App() {
               </div>
               
               {filteredExpenses.length > 0 && (
-                <button className="w-full mt-4 py-3 text-stone-400 text-[10px] font-black uppercase tracking-widest hover:text-stone-900 transition-colors border-t border-stone-50 pt-4">
+                <button className="w-full mt-4 py-3 text-stone-400 dark:text-stone-500 text-[10px] font-black uppercase tracking-widest hover:text-stone-900 dark:hover:text-stone-100 transition-colors border-t border-stone-50 dark:border-stone-800 pt-4">
                   Ver Historial Completo
                 </button>
               )}
@@ -570,18 +612,18 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowExpenseForm(false)}
-              className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-stone-900/40 dark:bg-stone-950/60 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-8"
+              className="relative bg-white dark:bg-stone-900 w-full max-w-md rounded-3xl shadow-2xl p-8"
             >
-              <h2 className="text-2xl font-bold mb-6">Registrar Gasto</h2>
+              <h2 className="text-2xl font-bold mb-6 text-stone-900 dark:text-stone-100">Registrar Gasto</h2>
               <form onSubmit={handleAddExpense} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Monto (€)</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Monto (€)</label>
                   <input 
                     type="number" 
                     step="0.01"
@@ -589,26 +631,26 @@ export default function App() {
                     value={newExpense.amount}
                     onChange={e => setNewExpense({...newExpense, amount: e.target.value})}
                     placeholder="0.00"
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 text-lg font-bold focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-lg font-bold text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Descripción</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Descripción</label>
                   <input 
                     type="text" 
                     value={newExpense.description}
                     onChange={e => setNewExpense({...newExpense, description: e.target.value})}
                     placeholder="Ej. Almuerzo, Gasolina..."
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Categoría</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Categoría</label>
                   <select 
                     required
                     value={newExpense.category_id}
                     onChange={e => setNewExpense({...newExpense, category_id: e.target.value})}
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
                   >
                     <option value="">Selecciona una categoría</option>
                     {categories.map(cat => (
@@ -617,26 +659,26 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Fecha</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Fecha</label>
                   <input 
                     type="date" 
                     required
                     value={newExpense.date}
                     onChange={e => setNewExpense({...newExpense, date: e.target.value})}
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
                   />
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button 
                     type="button"
                     onClick={() => setShowExpenseForm(false)}
-                    className="flex-1 py-4 rounded-xl font-bold text-stone-500 hover:bg-stone-50 transition-all"
+                    className="flex-1 py-4 rounded-xl font-bold text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800 transition-all"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-200 transition-all active:scale-95"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20 transition-all active:scale-95"
                   >
                     Guardar
                   </button>
@@ -656,58 +698,58 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowGoalForm(false)}
-              className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-stone-900/40 dark:bg-stone-950/60 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-8"
+              className="relative bg-white dark:bg-stone-900 w-full max-w-md rounded-3xl shadow-2xl p-8"
             >
-              <h2 className="text-2xl font-bold mb-6">Nueva Meta de Ahorro</h2>
+              <h2 className="text-2xl font-bold mb-6 text-stone-900 dark:text-stone-100">Nueva Meta de Ahorro</h2>
               <form onSubmit={handleAddGoal} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Nombre de la Meta</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Nombre de la Meta</label>
                   <input 
                     type="text" 
                     required
                     value={newGoal.name}
                     onChange={e => setNewGoal({...newGoal, name: e.target.value})}
                     placeholder="Ej. Viaje a Japón, Fondo de Emergencia..."
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Monto Objetivo (€)</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Monto Objetivo (€)</label>
                   <input 
                     type="number" 
                     required
                     value={newGoal.target_amount}
                     onChange={e => setNewGoal({...newGoal, target_amount: e.target.value})}
                     placeholder="0.00"
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 text-lg font-bold focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-lg font-bold text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Fecha Límite (Opcional)</label>
+                  <label className="block text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mb-1">Fecha Límite (Opcional)</label>
                   <input 
                     type="date" 
                     value={newGoal.deadline}
                     onChange={e => setNewGoal({...newGoal, deadline: e.target.value})}
-                    className="w-full bg-stone-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-xl p-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
                   />
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button 
                     type="button"
                     onClick={() => setShowGoalForm(false)}
-                    className="flex-1 py-4 rounded-xl font-bold text-stone-500 hover:bg-stone-50 transition-all"
+                    className="flex-1 py-4 rounded-xl font-bold text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800 transition-all"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-200 transition-all active:scale-95"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20 transition-all active:scale-95"
                   >
                     Crear Meta
                   </button>
