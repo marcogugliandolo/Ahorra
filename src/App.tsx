@@ -534,7 +534,7 @@ export default function App() {
               <div className="p-4 bg-emerald-600 rounded-2xl text-white mb-4 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20">
                 <Wallet size={32} />
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-stone-900 dark:text-stone-100">Ahorra</h1>
+              <h1 className="text-3xl font-black tracking-tight text-stone-900 dark:text-stone-100">Cartera</h1>
               <p className="text-stone-400 dark:text-stone-500 text-sm mt-2">Gestiona tus finanzas con inteligencia</p>
             </div>
 
@@ -688,7 +688,7 @@ export default function App() {
             <div className="p-2 bg-emerald-600 rounded-xl text-white">
               <Wallet size={24} />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">Ahorra</h1>
+            <h1 className="text-xl font-bold tracking-tight">Cartera</h1>
           </div>
           <div className="flex items-center gap-3">
             <button
