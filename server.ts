@@ -41,6 +41,7 @@ db.exec(`
     description TEXT,
     date TEXT NOT NULL,
     category_id INTEGER,
+    user_id INTEGER,
     FOREIGN KEY (category_id) REFERENCES categories (id)
   );
 
@@ -51,6 +52,7 @@ db.exec(`
     category_id INTEGER,
     frequency TEXT NOT NULL, -- 'monthly', 'weekly'
     next_date TEXT NOT NULL,
+    user_id INTEGER,
     FOREIGN KEY (category_id) REFERENCES categories (id)
   );
 
@@ -59,7 +61,8 @@ db.exec(`
     name TEXT NOT NULL,
     target_amount REAL NOT NULL,
     current_amount REAL DEFAULT 0,
-    deadline TEXT
+    deadline TEXT,
+    user_id INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS users (
@@ -68,6 +71,15 @@ db.exec(`
     password TEXT NOT NULL
   );
 `);
+
+// Migration: Add user_id if it doesn't exist
+const tables = ['expenses', 'recurring_expenses', 'goals'];
+tables.forEach(table => {
+  const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
+  if (!tableInfo.find(col => col.name === 'user_id')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN user_id INTEGER DEFAULT 1`);
+  }
+});
 
 // Seed categories if empty
 const categoryCount = db.prepare("SELECT count(*) as count FROM categories").get() as { count: number };
@@ -182,43 +194,44 @@ async function startServer() {
       SELECT e.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
       FROM expenses e 
       LEFT JOIN categories c ON e.category_id = c.id
+      WHERE e.user_id = ?
       ORDER BY date DESC
-    `).all();
+    `).all(req.session.userId);
     res.json(expenses);
   });
 
   app.post("/api/expenses", isAuthenticated, (req, res) => {
     const { amount, description, date, category_id } = req.body;
-    const result = db.prepare("INSERT INTO expenses (amount, description, date, category_id) VALUES (?, ?, ?, ?)")
-      .run(amount, description, date, category_id);
+    const result = db.prepare("INSERT INTO expenses (amount, description, date, category_id, user_id) VALUES (?, ?, ?, ?, ?)")
+      .run(amount, description, date, category_id, req.session.userId);
     res.json({ id: result.lastInsertRowid });
   });
 
   app.delete("/api/expenses/:id", isAuthenticated, (req, res) => {
-    db.prepare("DELETE FROM expenses WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM expenses WHERE id = ? AND user_id = ?").run(req.params.id, req.session.userId);
     res.json({ success: true });
   });
 
   app.get("/api/goals", isAuthenticated, (req, res) => {
-    const goals = db.prepare("SELECT * FROM goals").all();
+    const goals = db.prepare("SELECT * FROM goals WHERE user_id = ?").all(req.session.userId);
     res.json(goals);
   });
 
   app.post("/api/goals", isAuthenticated, (req, res) => {
     const { name, target_amount, deadline } = req.body;
-    const result = db.prepare("INSERT INTO goals (name, target_amount, deadline) VALUES (?, ?, ?)")
-      .run(name, target_amount, deadline);
+    const result = db.prepare("INSERT INTO goals (name, target_amount, deadline, user_id) VALUES (?, ?, ?, ?)")
+      .run(name, target_amount, deadline, req.session.userId);
     res.json({ id: result.lastInsertRowid });
   });
 
   app.patch("/api/goals/:id", isAuthenticated, (req, res) => {
     const { current_amount } = req.body;
-    db.prepare("UPDATE goals SET current_amount = ? WHERE id = ?").run(current_amount, req.params.id);
+    db.prepare("UPDATE goals SET current_amount = ? WHERE id = ? AND user_id = ?").run(current_amount, req.params.id, req.session.userId);
     res.json({ success: true });
   });
 
   app.delete("/api/goals/:id", isAuthenticated, (req, res) => {
-    db.prepare("DELETE FROM goals WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM goals WHERE id = ? AND user_id = ?").run(req.params.id, req.session.userId);
     res.json({ success: true });
   });
 
@@ -233,19 +246,20 @@ async function startServer() {
       SELECT r.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
       FROM recurring_expenses r 
       LEFT JOIN categories c ON r.category_id = c.id
-    `).all();
+      WHERE r.user_id = ?
+    `).all(req.session.userId);
     res.json(recurring);
   });
 
   app.post("/api/recurring", isAuthenticated, (req, res) => {
     const { amount, description, category_id, frequency, next_date } = req.body;
-    const result = db.prepare("INSERT INTO recurring_expenses (amount, description, category_id, frequency, next_date) VALUES (?, ?, ?, ?, ?)")
-      .run(amount, description, category_id, frequency, next_date);
+    const result = db.prepare("INSERT INTO recurring_expenses (amount, description, category_id, frequency, next_date, user_id) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(amount, description, category_id, frequency, next_date, req.session.userId);
     res.json({ id: result.lastInsertRowid });
   });
 
   app.delete("/api/recurring/:id", isAuthenticated, (req, res) => {
-    db.prepare("DELETE FROM recurring_expenses WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM recurring_expenses WHERE id = ? AND user_id = ?").run(req.params.id, req.session.userId);
     res.json({ success: true });
   });
 
