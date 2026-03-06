@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
   Trash2, 
@@ -44,7 +45,6 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { motion, AnimatePresence } from 'motion/react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Markdown from 'react-markdown';
@@ -86,6 +86,13 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [activeChartTab, setActiveChartTab] = useState<'categories' | 'trend'>('categories');
+  const [layout, setLayout] = useState({
+    lg: [
+      { i: 'charts', x: 0, y: 0, w: 8, h: 4 },
+      { i: 'goals', x: 0, y: 4, w: 8, h: 4 },
+      { i: 'sidebar', x: 8, y: 0, w: 4, h: 8 },
+    ],
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showFilters, setShowFilters] = useState(false);
@@ -512,10 +519,11 @@ export default function App() {
       byCategory[r.category_name] = (byCategory[r.category_name] || 0) + r.amount;
     });
 
-    const chartData = Object.entries(byCategory).map(([name, value]) => ({
+    const emeraldShades = ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'];
+    const chartData = Object.entries(byCategory).map(([name, value], index) => ({
       name,
       value,
-      color: categories.find(c => c.name === name)?.color || '#6b7280'
+      color: emeraldShades[index % emeraldShades.length]
     }));
 
     return { total, chartData };
@@ -584,7 +592,7 @@ export default function App() {
                     value={loginData.username}
                     onChange={e => setLoginData({...loginData, username: e.target.value})}
                     placeholder="Tu nombre de usuario"
-                    className="w-full bg-stone-50 dark:bg-stone-800 border-none rounded-2xl py-4 pl-12 pr-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500 transition-all"
+                    className="w-full bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl py-4 pl-12 pr-4 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                   />
                 </div>
               </div>
@@ -766,32 +774,32 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-emerald-600 dark:bg-emerald-700 p-5 rounded-3xl shadow-lg hover:shadow-xl transition-shadow"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl">
+              <div className="p-2 bg-emerald-500/30 text-white rounded-xl">
                 <TrendingUp size={18} />
               </div>
-              <span className="text-stone-500 dark:text-stone-400 text-xs font-bold uppercase tracking-wider">Gasto Total</span>
+              <span className="text-emerald-50 text-sm font-bold uppercase tracking-wider">Gasto Total</span>
             </div>
-            <div className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{totalExpenses.toLocaleString()}€</div>
-            <div className="text-stone-400 dark:text-stone-500 text-[10px] mt-1 font-medium">Desde el inicio</div>
+            <div className="text-5xl font-black tracking-tighter text-white">{totalExpenses.toLocaleString()}€</div>
+            <div className="text-emerald-100/80 text-[10px] mt-1 font-medium">Desde el inicio</div>
           </motion.div>
 
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-emerald-50/50 dark:bg-emerald-950/10 p-5 rounded-3xl border border-emerald-200/30 dark:border-emerald-800/30 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
                 <Calendar size={18} />
               </div>
-              <span className="text-stone-500 dark:text-stone-400 text-xs font-bold uppercase tracking-wider">Este Mes</span>
+              <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold uppercase tracking-wider">Este Mes</span>
             </div>
-            <div className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{monthlyExpenses.toLocaleString()}€</div>
-            <div className="text-stone-400 dark:text-stone-500 text-[10px] mt-1 font-medium capitalize">
+            <div className="text-2xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100">{monthlyExpenses.toLocaleString()}€</div>
+            <div className="text-emerald-600/70 dark:text-emerald-400/70 text-[10px] mt-1 font-medium capitalize">
               {format(new Date(selectedYear, selectedMonth), 'MMMM yyyy', { locale: es })}
             </div>
           </motion.div>
@@ -800,40 +808,40 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-emerald-50/50 dark:bg-emerald-950/10 p-5 rounded-3xl border border-emerald-200/30 dark:border-emerald-800/30 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-xl">
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
                 <Target size={18} />
               </div>
-              <span className="text-stone-500 dark:text-stone-400 text-xs font-bold uppercase tracking-wider">Metas Activas</span>
+              <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold uppercase tracking-wider">Metas Activas</span>
             </div>
-            <div className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{goals.length}</div>
-            <div className="text-stone-400 dark:text-stone-500 text-[10px] mt-1 font-medium">Objetivos de ahorro</div>
+            <div className="text-2xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100">{goals.length}</div>
+            <div className="text-emerald-600/70 dark:text-emerald-400/70 text-[10px] mt-1 font-medium">Objetivos de ahorro</div>
           </motion.div>
 
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Main Content Area */}
-          <div className="lg:col-span-8 space-y-8">
-            {/* Charts & Visualization */}
-            <div className="bg-white dark:bg-stone-900 p-8 rounded-[2rem] border border-stone-200/60 dark:border-stone-800 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Main Content Area - Bento Grid */}
+          <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Charts Card - Spanning 2 columns */}
+            <div className="md:col-span-2 bg-white/60 dark:bg-stone-900/60 backdrop-blur-2xl p-8 rounded-[2.5rem] border border-white/40 dark:border-stone-800/40 shadow-xl shadow-stone-200/20 dark:shadow-none hover:border-emerald-500/30 transition-all duration-500">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                 <div>
-                  <h3 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
+                  <h3 className="text-2xl font-black tracking-tight text-stone-950 dark:text-stone-50">
                     {activeChartTab === 'categories' ? 'Distribución de Gastos' : 'Tendencia de Gastos'}
                   </h3>
-                  <p className="text-stone-400 dark:text-stone-500 text-sm">
+                  <p className="text-stone-500 dark:text-stone-400 text-sm font-medium">
                     {activeChartTab === 'categories' ? 'Análisis visual por categorías' : 'Gastos totales últimos 12 meses'}
                   </p>
                 </div>
-                <div className="flex bg-stone-100 dark:bg-stone-800 p-1 rounded-xl self-start">
+                <div className="flex bg-stone-100/50 dark:bg-stone-800/50 p-1 rounded-2xl self-start border border-stone-200/50 dark:border-stone-700/50">
                   <button 
                     onClick={() => setActiveChartTab('categories')}
                     className={cn(
-                      "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                      activeChartTab === 'categories' ? "bg-white dark:bg-stone-700 shadow-sm text-stone-900 dark:text-stone-100" : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                      "px-5 py-2 text-xs font-bold rounded-xl transition-all",
+                      activeChartTab === 'categories' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "text-stone-600 dark:text-stone-400 hover:text-stone-900"
                     )}
                   >
                     Categorías
@@ -841,8 +849,8 @@ export default function App() {
                   <button 
                     onClick={() => setActiveChartTab('trend')}
                     className={cn(
-                      "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                      activeChartTab === 'trend' ? "bg-white dark:bg-stone-700 shadow-sm text-stone-900 dark:text-stone-100" : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                      "px-5 py-2 text-xs font-bold rounded-xl transition-all",
+                      activeChartTab === 'trend' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "text-stone-600 dark:text-stone-400 hover:text-stone-900"
                     )}
                   >
                     Tendencia
@@ -966,7 +974,7 @@ export default function App() {
                     <motion.div 
                       layout
                       key={goal.id} 
-                      className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/60 dark:border-stone-800 shadow-sm space-y-4"
+                      className="bg-white/60 dark:bg-stone-900/60 backdrop-blur-xl p-6 rounded-[2rem] border border-white/40 dark:border-stone-800/40 shadow-lg shadow-stone-200/10 dark:shadow-none space-y-4 hover:border-emerald-500/30 transition-all duration-500"
                     >
                       <div className="flex justify-between items-start">
                         <div>
@@ -1129,7 +1137,7 @@ export default function App() {
 
           {/* Sidebar Area */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white dark:bg-stone-900 p-6 rounded-[2rem] border border-stone-200/60 dark:border-stone-800 shadow-sm flex flex-col h-full max-h-[800px]">
+            <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md p-6 rounded-[2rem] border border-stone-200/50 dark:border-stone-800/50 shadow-lg shadow-stone-200/20 dark:shadow-none flex flex-col h-full max-h-[800px]">
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold tracking-tight text-stone-900 dark:text-stone-100">Gastos</h3>
@@ -1170,27 +1178,27 @@ export default function App() {
                     <motion.div 
                       layout
                       key={expense.id}
-                      className="flex items-center justify-between p-3 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-2xl transition-all group"
+                      className="flex items-center justify-between p-4 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 rounded-2xl transition-all group border border-transparent hover:border-emerald-100 dark:hover:border-emerald-900"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-4">
                         <div 
-                          className="p-2.5 rounded-xl text-white shadow-sm"
+                          className="p-3 rounded-2xl text-white shadow-sm"
                           style={{ backgroundColor: expense.category_color }}
                         >
-                          <Icon size={16} />
+                          <Icon size={18} />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-xs truncate text-stone-800 dark:text-stone-200">{expense.description || expense.category_name}</div>
-                          <div className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">{format(parseISO(expense.date), 'dd MMM', { locale: es })}</div>
+                          <div className="font-bold text-sm text-stone-800 dark:text-stone-200 truncate">{expense.description || expense.category_name}</div>
+                          <div className="text-[11px] text-stone-400 dark:text-stone-500 font-medium">{format(parseISO(expense.date), 'dd MMM', { locale: es })}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="font-black text-xs text-red-500 dark:text-red-400">-{expense.amount.toLocaleString()}€</div>
+                        <div className="font-black text-sm text-emerald-600 dark:text-emerald-400">-{expense.amount.toLocaleString()}€</div>
                         <button 
                           onClick={() => handleDeleteExpense(expense.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-stone-300 dark:text-stone-600 hover:text-red-500 dark:hover:text-red-400 transition-all"
+                          className="opacity-0 group-hover:opacity-100 p-2 text-stone-300 dark:text-stone-600 hover:text-red-500 dark:hover:text-red-400 transition-all"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </motion.div>
