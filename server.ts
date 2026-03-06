@@ -196,9 +196,15 @@ async function startServer() {
       const clientId = process.env.GOOGLE_CLIENT_ID;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
       
+      console.log("Checking OAuth config...");
+      console.log("GOOGLE_CLIENT_ID present:", !!clientId);
+      console.log("GOOGLE_CLIENT_SECRET present:", !!clientSecret);
+      console.log("APP_URL from env:", process.env.APP_URL);
+
       // Detect appUrl from request to support custom domains automatically
       const host = req.get('x-forwarded-host') || req.get('host');
-      const protocol = req.get('x-forwarded-proto') || 'https';
+      // Force https as the app is behind a proxy that handles SSL
+      const protocol = 'https'; 
       let appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
       
       if (host) {
@@ -235,7 +241,7 @@ async function startServer() {
     const { code } = req.query;
     
     const host = req.get('x-forwarded-host') || req.get('host');
-    const protocol = req.get('x-forwarded-proto') || 'https';
+    const protocol = 'https';
     let appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
     
     if (host) {
