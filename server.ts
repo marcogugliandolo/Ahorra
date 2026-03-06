@@ -187,6 +187,91 @@ async function startServer() {
     }
   });
 
+  // Google OAuth Routes
+  app.get("/api/auth/google/url", (req, res) => {
+    const redirectUri = `${process.env.APP_URL}/api/auth/google/callback`;
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'offline',
+      prompt: 'consent'
+    });
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    res.json({ url: authUrl });
+  });
+
+  app.get("/api/auth/google/callback", async (req, res) => {
+    const { code } = req.query;
+    const redirectUri = `${process.env.APP_URL}/api/auth/google/callback`;
+
+    try {
+      // Exchange code for tokens
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code: code as string,
+          client_id: process.env.GOOGLE_CLIENT_ID || '',
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+
+      const tokenData = await tokenResponse.json();
+      
+      if (!tokenData.access_token) {
+        throw new Error('Failed to get access token');
+      }
+
+      // Get user info
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+      const userData = await userResponse.json();
+
+      if (!userData.email) {
+        throw new Error('Failed to get user email');
+      }
+
+      // Find or create user
+      let user = db.prepare("SELECT * FROM users WHERE username = ?").get(userData.email) as any;
+      if (!user) {
+        // Create user with a random password since they use Google
+        const randomPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = bcrypt.hashSync(randomPassword, 10);
+        const result = db.prepare("INSERT INTO users (username, password) VALUES (?, ?)").run(userData.email, hashedPassword);
+        user = { id: result.lastInsertRowid, username: userData.email };
+      }
+
+      // Set session
+      req.session.userId = user.id;
+      req.session.username = user.username;
+
+      // Send success message to parent window and close popup
+      res.send(`
+        <html>
+          <body>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
+                window.close();
+              } else {
+                window.location.href = '/';
+              }
+            </script>
+            <p>Authentication successful. This window should close automatically.</p>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Google OAuth error:', error);
+      res.status(500).send('Authentication failed');
+    }
+  });
+
   // API Routes
   app.get("/api/categories", isAuthenticated, (req, res) => {
     const categories = db.prepare("SELECT * FROM categories WHERE user_id IS NULL OR user_id = ?").all(req.session.userId);
