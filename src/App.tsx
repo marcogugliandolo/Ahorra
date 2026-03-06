@@ -72,6 +72,30 @@ const ICON_MAP: Record<string, any> = {
   ArrowRight
 };
 
+const DEFAULT_LAYOUTS = {
+  lg: [
+    { i: 'charts', x: 0, y: 0, w: 8, h: 4 },
+    { i: 'goals', x: 0, y: 4, w: 8, h: 3 },
+    { i: 'budgets', x: 0, y: 7, w: 4, h: 4 },
+    { i: 'recurring', x: 4, y: 7, w: 4, h: 4 },
+    { i: 'sidebar', x: 8, y: 0, w: 4, h: 11 },
+  ],
+  md: [
+    { i: 'charts', x: 0, y: 0, w: 10, h: 4 },
+    { i: 'goals', x: 0, y: 4, w: 10, h: 3 },
+    { i: 'budgets', x: 0, y: 7, w: 5, h: 4 },
+    { i: 'recurring', x: 5, y: 7, w: 5, h: 4 },
+    { i: 'sidebar', x: 0, y: 11, w: 10, h: 8 },
+  ],
+  sm: [
+    { i: 'charts', x: 0, y: 0, w: 6, h: 4 },
+    { i: 'goals', x: 0, y: 4, w: 6, h: 4 },
+    { i: 'budgets', x: 0, y: 8, w: 6, h: 4 },
+    { i: 'recurring', x: 0, y: 12, w: 6, h: 4 },
+    { i: 'sidebar', x: 0, y: 16, w: 6, h: 8 },
+  ]
+};
+
 export default function App() {
   const [user, setUser] = useState<{ id: number, username: string } | null>(() => {
     const saved = localStorage.getItem('user');
@@ -90,28 +114,22 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [activeChartTab, setActiveChartTab] = useState<'categories' | 'trend'>('categories');
   const { width, containerRef, mounted } = useContainerWidth();
-  const [layouts, setLayouts] = useState({
-    lg: [
-      { i: 'charts', x: 0, y: 0, w: 8, h: 4 },
-      { i: 'goals', x: 0, y: 4, w: 8, h: 3 },
-      { i: 'budgets', x: 0, y: 7, w: 4, h: 4 },
-      { i: 'recurring', x: 4, y: 7, w: 4, h: 4 },
-      { i: 'sidebar', x: 8, y: 0, w: 4, h: 11 },
-    ],
-    md: [
-      { i: 'charts', x: 0, y: 0, w: 10, h: 4 },
-      { i: 'goals', x: 0, y: 4, w: 10, h: 3 },
-      { i: 'budgets', x: 0, y: 7, w: 5, h: 4 },
-      { i: 'recurring', x: 5, y: 7, w: 5, h: 4 },
-      { i: 'sidebar', x: 0, y: 11, w: 10, h: 8 },
-    ],
-    sm: [
-      { i: 'charts', x: 0, y: 0, w: 6, h: 4 },
-      { i: 'goals', x: 0, y: 4, w: 6, h: 4 },
-      { i: 'budgets', x: 0, y: 8, w: 6, h: 4 },
-      { i: 'recurring', x: 0, y: 12, w: 6, h: 4 },
-      { i: 'sidebar', x: 0, y: 16, w: 6, h: 8 },
-    ]
+  const [layouts, setLayouts] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          const savedLayout = localStorage.getItem(`dashboard_layout_${parsedUser.id}`);
+          if (savedLayout) {
+            return JSON.parse(savedLayout);
+          }
+        } catch (e) {
+          console.error("Error loading layout", e);
+        }
+      }
+    }
+    return DEFAULT_LAYOUTS;
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -156,10 +174,30 @@ export default function App() {
     if (user) {
       localStorage.setItem('user', JSON.stringify(user));
       fetchData();
+      
+      // Load user layout
+      const savedLayout = localStorage.getItem(`dashboard_layout_${user.id}`);
+      if (savedLayout) {
+        try {
+          setLayouts(JSON.parse(savedLayout));
+        } catch (e) {
+          console.error("Error loading layout", e);
+        }
+      } else {
+        setLayouts(DEFAULT_LAYOUTS);
+      }
     } else {
       localStorage.removeItem('user');
+      setLayouts(DEFAULT_LAYOUTS);
     }
   }, [user]);
+
+  const handleLayoutChange = (currentLayout: any, allLayouts: any) => {
+    setLayouts(allLayouts);
+    if (user) {
+      localStorage.setItem(`dashboard_layout_${user.id}`, JSON.stringify(allLayouts));
+    }
+  };
 
   const getAuthHeaders = () => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -850,7 +888,7 @@ export default function App() {
               breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
               cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
               rowHeight={100}
-              onLayoutChange={(layout, newLayouts) => setLayouts(newLayouts)}
+              onLayoutChange={handleLayoutChange}
               width={width}
               draggableHandle=".drag-handle"
               margin={[24, 24]}
