@@ -235,6 +235,7 @@ export default function App() {
   const [showAIAnalyst, setShowAIAnalyst] = useState(false);
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [newRecurring, setNewRecurring] = useState({ amount: '', description: '', category_id: '', frequency: 'monthly' as const, next_date: format(new Date(), 'yyyy-MM-dd') });
+  const [editingRecurring, setEditingRecurring] = useState<{ id: number, amount: string, description: string, category_id: string, frequency: 'monthly' | 'weekly', next_date: string } | null>(null);
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
@@ -265,7 +266,8 @@ export default function App() {
   const [usersList, setUsersList] = useState<{id: number, username: string, account_mode: string}[]>([]);
   const [editingExpense, setEditingExpense] = useState<{ id: number, amount: string, description: string, category_id: string, date: string } | null>(null);
   const [newExpense, setNewExpense] = useState({ amount: '', description: '', category_id: '', date: format(new Date(), 'yyyy-MM-dd') });
-  const [newGoal, setNewGoal] = useState({ name: '', target_amount: '', deadline: '' });
+  const [newGoal, setNewGoal] = useState({ name: '', target_amount: '', current_amount: '', deadline: '' });
+  const [editingGoal, setEditingGoal] = useState<{ id: number, name: string, target_amount: string, current_amount: string, deadline: string } | null>(null);
   const [newUser, setNewUser] = useState({ username: '', password: '' });
   const [newCategory, setNewCategory] = useState({ name: '', icon: 'MoreHorizontal', color: '#10b981' });
 
@@ -728,14 +730,17 @@ export default function App() {
   const handleAddRecurring = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/recurring', {
-        method: 'POST',
+      const url = editingRecurring ? `/api/recurring/${editingRecurring.id}` : '/api/recurring';
+      const method = editingRecurring ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method: method,
         headers: getAuthHeaders(),
         body: JSON.stringify(newRecurring)
       });
       if (res.ok) {
         fetchData();
         setShowRecurringForm(false);
+        setEditingRecurring(null);
         setNewRecurring({ amount: '', description: '', category_id: '', frequency: 'monthly', next_date: format(new Date(), 'yyyy-MM-dd') });
       }
     } catch (err) {
@@ -772,6 +777,18 @@ export default function App() {
         headers: getAuthHeaders()
       });
       if (res.ok) fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteGoal = async (id: number) => {
+    try {
+      await fetch(`/api/goals/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      fetchData();
     } catch (err) {
       console.error(err);
     }
@@ -883,35 +900,39 @@ export default function App() {
     try {
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64Data = (reader.result as string).split(',')[1];
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: [
-            {
-              parts: [
-                { inlineData: { data: base64Data, mimeType: file.type } },
-                { text: "Analiza este ticket y devuelve un JSON con: amount (número), description (texto corto), date (YYYY-MM-DD), category_name (una de: Comida, Transporte, Vivienda, Entretenimiento, Salud, Otros). Solo el JSON." }
-              ]
-            }
-          ],
-          config: { responseMimeType: "application/json" }
-        });
+        try {
+          const base64Data = (reader.result as string).split(',')[1];
+          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+          const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [
+              {
+                parts: [
+                  { inlineData: { data: base64Data, mimeType: file.type } },
+                  { text: "Analiza este ticket y devuelve un JSON con: amount (número), description (texto corto), date (YYYY-MM-DD), category_name (una de: Comida, Transporte, Vivienda, Entretenimiento, Salud, Otros). Solo el JSON." }
+                ]
+              }
+            ],
+            config: { responseMimeType: "application/json" }
+          });
 
-        const result = JSON.parse(response.text || '{}');
-        const category = categories.find(c => c.name.toLowerCase() === (result.category_name || '').toLowerCase()) || categories.find(c => c.name === 'Otros');
-        
-        setNewExpense({
-          amount: result.amount?.toString() || '',
-          description: result.description || 'Gasto escaneado',
-          date: result.date || format(new Date(), 'yyyy-MM-dd'),
-          category_id: category?.id.toString() || ''
-        });
-        setShowExpenseForm(true);
+          const result = JSON.parse(response.text || '{}');
+          const category = categories.find(c => c.name.toLowerCase() === (result.category_name || '').toLowerCase()) || categories.find(c => c.name === 'Otros');
+          
+          setNewExpense({
+            amount: result.amount?.toString() || '',
+            description: result.description || 'Gasto escaneado',
+            date: result.date || format(new Date(), 'yyyy-MM-dd'),
+            category_id: category?.id.toString() || ''
+          });
+          setShowExpenseForm(true);
+        } catch (err) {
+          console.error("Error processing receipt:", err);
+        }
       };
       reader.readAsDataURL(file);
     } catch (err) {
-      console.error(err);
+      console.error("Error reading file:", err);
     } finally {
       setScanningReceipt(false);
     }
@@ -968,6 +989,42 @@ export default function App() {
     setShowExpenseForm(true);
   };
 
+  const openEditRecurring = (rec: any) => {
+    setEditingRecurring({
+      id: rec.id,
+      amount: rec.amount.toString(),
+      description: rec.description || '',
+      category_id: rec.category_id.toString(),
+      frequency: rec.frequency,
+      next_date: rec.next_date
+    });
+    setNewRecurring({
+      amount: rec.amount.toString(),
+      description: rec.description || '',
+      category_id: rec.category_id.toString(),
+      frequency: rec.frequency,
+      next_date: rec.next_date
+    });
+    setShowRecurringForm(true);
+  };
+
+  const openEditGoal = (goal: any) => {
+    setEditingGoal({
+      id: goal.id,
+      name: goal.name,
+      target_amount: goal.target_amount.toString(),
+      current_amount: goal.current_amount.toString(),
+      deadline: goal.deadline || ''
+    });
+    setNewGoal({
+      name: goal.name,
+      target_amount: goal.target_amount.toString(),
+      current_amount: goal.current_amount.toString(),
+      deadline: goal.deadline || ''
+    });
+    setShowGoalForm(true);
+  };
+
   const handleDeleteExpense = async (id: number) => {
     if (!user) return;
     try {
@@ -986,15 +1043,19 @@ export default function App() {
     if (!newGoal.name || !newGoal.target_amount || !user) return;
 
     try {
-      await fetch('/api/goals', {
-        method: 'POST',
+      const url = editingGoal ? `/api/goals/${editingGoal.id}` : '/api/goals';
+      const method = editingGoal ? 'PUT' : 'POST';
+      await fetch(url, {
+        method: method,
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...newGoal,
-          target_amount: parseFloat(newGoal.target_amount)
+          target_amount: parseFloat(newGoal.target_amount),
+          current_amount: parseFloat(newGoal.current_amount || '0')
         })
       });
-      setNewGoal({ name: '', target_amount: '', deadline: '' });
+      setNewGoal({ name: '', target_amount: '', current_amount: '', deadline: '' });
+      setEditingGoal(null);
       setShowGoalForm(false);
       fetchData();
     } catch (error) {
@@ -1915,6 +1976,18 @@ export default function App() {
                           >
                             +100€
                           </button>
+                          <button 
+                            onClick={() => openEditGoal(goal)}
+                            className="p-2 rounded-xl bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:text-emerald-500 transition-colors"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteGoal(goal.id)}
+                            className="p-2 rounded-xl bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </motion.div>
                     );
@@ -2026,6 +2099,12 @@ export default function App() {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="font-black text-stone-900 dark:text-stone-100">{rec.amount.toLocaleString()}€</div>
+                          <button 
+                            onClick={() => openEditRecurring(rec)}
+                            className="text-stone-300 hover:text-emerald-500 transition-colors"
+                          >
+                            <Edit2 size={16} />
+                          </button>
                           <button 
                             onClick={() => handleDeleteRecurring(rec.id)}
                             className="text-stone-300 hover:text-red-500 transition-colors"
@@ -3106,7 +3185,7 @@ export default function App() {
                         value={loginData.username}
                         onChange={e => setLoginData({...loginData, username: e.target.value})}
                         placeholder="Tu nombre de usuario"
-                        className="w-full bg-stone-50 dark:bg-stone-950 border-2 border-transparent focus:border-emerald-500 rounded-2xl py-3.5 pl-11 pr-4 text-stone-900 dark:text-stone-100 transition-all text-sm"
+                        className="w-full bg-stone-50 dark:bg-stone-950 border-2 border-transparent focus:border-emerald-500 rounded-2xl py-3.5 pl-11 pr-4 text-stone-900 dark:text-white transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -3121,7 +3200,7 @@ export default function App() {
                         value={loginData.password}
                         onChange={e => setLoginData({...loginData, password: e.target.value})}
                         placeholder="••••••••"
-                        className="w-full bg-stone-50 dark:bg-stone-950 border-2 border-transparent focus:border-emerald-500 rounded-2xl py-3.5 pl-11 pr-4 text-stone-900 dark:text-stone-100 transition-all text-sm"
+                        className="w-full bg-stone-50 dark:bg-stone-950 border-2 border-transparent focus:border-emerald-500 rounded-2xl py-3.5 pl-11 pr-4 text-stone-900 dark:text-white transition-all text-sm"
                       />
                     </div>
                   </div>

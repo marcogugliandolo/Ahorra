@@ -678,14 +678,14 @@ async function startServer() {
     res.json({ id: result.lastInsertRowid });
   });
 
-  app.patch("/api/goals/:id", isAuthenticated, (req, res) => {
-    const { current_amount } = req.body;
+  app.put("/api/goals/:id", isAuthenticated, (req, res) => {
+    const { name, target_amount, current_amount, deadline } = req.body;
     const userId = req.session.userId;
     db.prepare(`
-      UPDATE goals SET current_amount = ? 
+      UPDATE goals SET name = ?, target_amount = ?, current_amount = ?, deadline = ? 
       WHERE id = ? 
       AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
-    `).run(current_amount, req.params.id, userId, userId);
+    `).run(name, target_amount, current_amount, deadline, req.params.id, userId, userId);
     res.json({ success: true });
   });
 
@@ -732,6 +732,17 @@ async function startServer() {
     const result = db.prepare("INSERT INTO recurring_expenses (amount, description, category_id, frequency, next_date, user_id, group_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(amount, description, category_id, frequency, next_date, userId, groupId);
     res.json({ id: result.lastInsertRowid });
+  });
+
+  app.put("/api/recurring/:id", isAuthenticated, (req, res) => {
+    const { amount, description, category_id, frequency, next_date } = req.body;
+    const userId = req.session.userId;
+    db.prepare(`
+      UPDATE recurring_expenses SET amount = ?, description = ?, category_id = ?, frequency = ?, next_date = ? 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+    `).run(amount, description, category_id, frequency, next_date, req.params.id, userId, userId);
+    res.json({ success: true });
   });
 
   app.delete("/api/recurring/:id", isAuthenticated, (req, res) => {
