@@ -776,8 +776,32 @@ async function startServer() {
     if (req.session.username !== 'gugliama' && req.session.username !== 'marcogugliandolo94@gmail.com') {
       return res.status(403).json({ error: "No tienes permiso para ver usuarios" });
     }
-    const users = db.prepare("SELECT id, username FROM users").all();
+    const users = db.prepare("SELECT id, username, account_mode FROM users").all();
     res.json(users);
+  });
+
+  app.put("/api/users/:id/mode", isAuthenticated, (req, res) => {
+    const adminId = req.session.userId;
+    const userIdToUpdate = parseInt(req.params.id);
+    const { account_mode } = req.body;
+
+    if (!account_mode || !['individual', 'familiar', 'amigos'].includes(account_mode)) {
+      return res.status(400).json({ error: "Modo de cuenta inválido" });
+    }
+
+    // Check if the requester is an admin
+    const adminMembership = db.prepare("SELECT group_id, role FROM group_members WHERE user_id = ?").get(adminId) as any;
+    
+    if (!adminMembership || adminMembership.role !== 'admin') {
+      return res.status(403).json({ error: "Solo el administrador puede cambiar el modo de cuenta" });
+    }
+
+    try {
+      db.prepare("UPDATE users SET account_mode = ? WHERE id = ?").run(account_mode, userIdToUpdate);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Error al actualizar el modo de cuenta" });
+    }
   });
 
   app.delete("/api/users/:id", isAuthenticated, (req, res) => {

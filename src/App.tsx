@@ -262,7 +262,7 @@ export default function App() {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [usersList, setUsersList] = useState<{id: number, username: string}[]>([]);
+  const [usersList, setUsersList] = useState<{id: number, username: string, account_mode: string}[]>([]);
   const [editingExpense, setEditingExpense] = useState<{ id: number, amount: string, description: string, category_id: string, date: string } | null>(null);
   const [newExpense, setNewExpense] = useState({ amount: '', description: '', category_id: '', date: format(new Date(), 'yyyy-MM-dd') });
   const [newGoal, setNewGoal] = useState({ name: '', target_amount: '', deadline: '' });
@@ -807,6 +807,24 @@ export default function App() {
     }
   };
 
+  const handleUpdateMode = async (id: number, mode: string) => {
+    try {
+      const res = await fetch(`/api/users/${id}/mode`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_mode: mode })
+      });
+      if (res.ok) {
+        fetchUsers();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Error al actualizar el modo de cuenta');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleExport = async () => {
     try {
       const res = await fetch('/api/expenses/export', { headers: getAuthHeaders() });
@@ -1182,7 +1200,7 @@ export default function App() {
                       value={loginData.username}
                       onChange={e => setLoginData({...loginData, username: e.target.value})}
                       placeholder="Tu nombre de usuario"
-                      className="w-full bg-white dark:bg-stone-900 border-2 border-stone-100 dark:border-stone-800 rounded-2xl py-4 pl-12 pr-4 text-stone-900 dark:text-stone-100 focus:ring-0 focus:border-emerald-500 transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-stone-900 border-2 border-stone-100 dark:border-stone-800 rounded-2xl py-4 pl-12 pr-4 text-white focus:ring-0 focus:border-emerald-500 transition-all shadow-sm"
                     />
                   </div>
                 </div>
@@ -1197,7 +1215,7 @@ export default function App() {
                       value={loginData.password}
                       onChange={e => setLoginData({...loginData, password: e.target.value})}
                       placeholder="••••••••"
-                      className="w-full bg-white dark:bg-stone-900 border-2 border-stone-100 dark:border-stone-800 rounded-2xl py-4 pl-12 pr-4 text-stone-900 dark:text-stone-100 focus:ring-0 focus:border-emerald-500 transition-all shadow-sm"
+                      className="w-full bg-white dark:bg-stone-900 border-2 border-stone-100 dark:border-stone-800 rounded-2xl py-4 pl-12 pr-4 text-white focus:ring-0 focus:border-emerald-500 transition-all shadow-sm"
                     />
                   </div>
                 </div>
@@ -1292,7 +1310,7 @@ export default function App() {
                       value={joinCode}
                       onChange={e => setJoinCode(e.target.value.toUpperCase())}
                       placeholder="CÓDIGO (Ej: AB12CD34)"
-                      className="w-full bg-stone-50 dark:bg-stone-800 border-2 border-stone-100 dark:border-stone-700 rounded-xl py-3 px-4 text-center font-mono text-lg tracking-widest focus:border-emerald-500 transition-all"
+                      className="w-full bg-stone-50 dark:bg-stone-800 border-2 border-stone-100 dark:border-stone-700 rounded-xl py-3 px-4 text-center font-mono text-lg tracking-widest text-white focus:border-emerald-500 transition-all"
                     />
                     <div className="flex gap-2">
                       <button 
@@ -2785,13 +2803,24 @@ export default function App() {
                         </div>
                         <div className="flex items-center gap-2">
                           {(u.username !== 'gugliama' && u.username !== 'marcogugliandolo94@gmail.com') ? (
-                            <button 
-                              onClick={() => handleDeleteUser(u.id)}
-                              className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                              title="Eliminar usuario"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            <>
+                              <select 
+                                value={u.account_mode}
+                                onChange={(e) => handleUpdateMode(u.id, e.target.value)}
+                                className="text-xs bg-stone-100 dark:bg-stone-700 rounded-lg px-2 py-1"
+                              >
+                                <option value="individual">Individual</option>
+                                <option value="familiar">Familiar</option>
+                                <option value="amigos">Amigos</option>
+                              </select>
+                              <button 
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                title="Eliminar usuario"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </>
                           ) : (
                             <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 rounded-full uppercase tracking-widest">
                               Admin
