@@ -136,7 +136,25 @@ const DEFAULT_LAYOUTS = {
 };
 
 export default function App() {
-  const [user, setUser] = useState<{ id: number, username: string, profile_image?: string, account_mode?: string, theme_color?: string } | null>(() => {
+  const [user, setUser] = useState<{ 
+    id: number, 
+    username: string, 
+    profile_image?: string, 
+    account_mode?: string, 
+    theme_color?: string,
+    group?: {
+      id: number;
+      name: string;
+      type: string;
+      invite_code: string;
+      members: Array<{
+        id: number;
+        username: string;
+        profile_image?: string;
+        role: string;
+      }>;
+    }
+  } | null>(() => {
     const saved = localStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
   });
@@ -161,6 +179,9 @@ export default function App() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [loginData, setLoginData] = useState({ username: '', password: '', account_mode: 'individual' });
   const [authError, setAuthError] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -397,6 +418,9 @@ export default function App() {
         const data = await res.json();
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
+        if (data.account_mode !== 'individual' && data.group) {
+          setShowInviteModal(true);
+        }
       } else {
         const data = await res.json();
         setAuthError(data.error || 'Error al registrarse');
@@ -423,6 +447,35 @@ export default function App() {
       // Still clear local state
       setUser(null);
       localStorage.removeItem('user');
+    }
+  };
+
+  const handleJoinGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      const res = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ invite_code: joinCode })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Refresh user data
+        const meRes = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          setUser(meData);
+          localStorage.setItem('user', JSON.stringify(meData));
+          setIsJoining(false);
+          setJoinCode('');
+        }
+      } else {
+        const data = await res.json();
+        setAuthError(data.error || 'Error al unirse al grupo');
+      }
+    } catch (error) {
+      setAuthError('Error de conexión');
     }
   };
 
@@ -1035,19 +1088,69 @@ export default function App() {
                   <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                 </button>
 
-                <div className="text-center mt-6">
+                <div className="text-center mt-6 space-y-4">
                   <button 
                     type="button"
                     onClick={() => {
                       setIsRegistering(!isRegistering);
+                      setIsJoining(false);
                       setAuthError('');
                     }}
-                    className="text-stone-500 dark:text-stone-400 text-sm font-medium hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                    className="text-stone-500 dark:text-stone-400 text-sm font-medium hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors block w-full"
                   >
                     {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate gratis'}
                   </button>
+                  
+                  {!isJoining && !isRegistering && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsJoining(true);
+                        setAuthError('');
+                      }}
+                      className="text-emerald-600 dark:text-emerald-400 text-sm font-bold hover:underline transition-all"
+                    >
+                      ¿Tienes un código de invitación? Únete a un grupo
+                    </button>
+                  )}
                 </div>
               </form>
+
+              {isJoining && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8 p-6 bg-white dark:bg-stone-900 rounded-3xl border-2 border-emerald-100 dark:border-emerald-900/30 shadow-xl"
+                >
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 mb-2">Unirse a un grupo</h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">Introduce el código que te han compartido para unirte a su espacio.</p>
+                  <form onSubmit={handleJoinGroup} className="space-y-4">
+                    <input 
+                      type="text"
+                      required
+                      value={joinCode}
+                      onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="CÓDIGO (Ej: AB12CD34)"
+                      className="w-full bg-stone-50 dark:bg-stone-800 border-2 border-stone-100 dark:border-stone-700 rounded-xl py-3 px-4 text-center font-mono text-lg tracking-widest focus:border-emerald-500 transition-all"
+                    />
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => setIsJoining(false)}
+                        className="flex-1 py-3 text-sm font-bold text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-all"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="submit"
+                        className="flex-1 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20"
+                      >
+                        Unirse
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              )}
             </motion.div>
           </div>
 
@@ -1192,6 +1295,19 @@ export default function App() {
                         <span>Configuración</span>
                       </button>
                       
+                      {user?.account_mode !== 'individual' && (
+                        <button
+                          onClick={() => {
+                            setShowInviteModal(true);
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors"
+                        >
+                          <Sparkles size={16} className="text-emerald-500" />
+                          <span>Invitar al grupo</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setDarkMode(!darkMode);
@@ -1248,6 +1364,38 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Group Info Bar */}
+      {user?.account_mode !== 'individual' && user?.group && (
+        <div className="bg-emerald-50/50 dark:bg-emerald-950/10 border-b border-emerald-100/50 dark:border-emerald-900/20 py-2">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex -space-x-2">
+                {user.group.members?.map((member: any) => (
+                  <div key={member.id} className="w-7 h-7 rounded-full border-2 border-white dark:border-stone-900 bg-stone-200 dark:bg-stone-800 overflow-hidden shadow-sm" title={member.username}>
+                    {member.profile_image ? (
+                      <img src={member.profile_image} alt={member.username} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-stone-400">
+                        <UserIcon size={12} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+                {user.group.name} • {user.group.members?.length || 0} miembros
+              </span>
+            </div>
+            <button 
+              onClick={() => setShowInviteModal(true)}
+              className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest hover:underline"
+            >
+              Código: {user.group.invite_code}
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -1767,7 +1915,24 @@ export default function App() {
                           </div>
                           <div className="min-w-0">
                             <div className="font-bold text-sm text-stone-800 dark:text-stone-200 truncate">{expense.description || expense.category_name}</div>
-                            <div className="text-[11px] text-stone-400 dark:text-stone-500 font-medium">{format(parseISO(expense.date), 'dd MMM', { locale: es })}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-[11px] text-stone-400 dark:text-stone-500 font-medium">{format(parseISO(expense.date), 'dd MMM', { locale: es })}</div>
+                              {user?.account_mode !== 'individual' && expense.author_name && (
+                                <>
+                                  <span className="text-[10px] text-stone-300 dark:text-stone-700">•</span>
+                                  <div className="flex items-center gap-1">
+                                    {expense.author_image ? (
+                                      <img src={expense.author_image} alt="" className="w-3 h-3 rounded-full object-cover" referrerPolicy="no-referrer" />
+                                    ) : (
+                                      <div className="w-3 h-3 rounded-full bg-stone-200 dark:bg-stone-800 flex items-center justify-center">
+                                        <UserIcon size={6} />
+                                      </div>
+                                    )}
+                                    <span className="text-[10px] text-stone-400 dark:text-stone-500 font-bold">{expense.author_name}</span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -1809,6 +1974,90 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {showInviteModal && user?.group && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-stone-950/60 backdrop-blur-sm"
+              onClick={() => setShowInviteModal(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white dark:bg-stone-900 w-full max-w-md rounded-3xl shadow-2xl p-8 overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500" />
+              
+              <div className="flex flex-col items-center text-center gap-6">
+                <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Sparkles size={40} />
+                </div>
+                
+                <div>
+                  <h2 className="text-2xl font-black text-stone-900 dark:text-stone-100 mb-2">¡Cuenta creada!</h2>
+                  <p className="text-stone-500 dark:text-stone-400">
+                    Has activado el modo <strong>{user.account_mode === 'familiar' ? 'Familiar' : 'Amigos'}</strong>. 
+                    Comparte este código para que otros se unan a tu espacio compartido.
+                  </p>
+                </div>
+
+                <div className="w-full bg-stone-50 dark:bg-stone-800 p-6 rounded-2xl border-2 border-dashed border-stone-200 dark:border-stone-700 relative group">
+                  <span className="text-xs font-bold text-stone-400 uppercase tracking-widest block mb-2">Código de Invitación</span>
+                  <div className="text-3xl font-black tracking-[0.2em] text-emerald-600 dark:text-emerald-400 font-mono">
+                    {user.group.invite_code}
+                  </div>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(user.group.invite_code);
+                      alert('Código copiado al portapapeles');
+                    }}
+                    className="mt-4 text-xs font-bold text-emerald-600 hover:underline flex items-center justify-center gap-1 mx-auto"
+                  >
+                    <Download size={14} />
+                    Copiar código
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <button 
+                    onClick={() => {
+                      const text = `¡Únete a mi grupo en Alza! Mi código de invitación es: ${user.group.invite_code}`;
+                      window.open(`mailto:?subject=Invitación a Alza&body=${encodeURIComponent(text)}`);
+                    }}
+                    className="flex items-center justify-center gap-2 py-3 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-xl font-bold text-sm hover:bg-stone-200 dark:hover:bg-stone-700 transition-all"
+                  >
+                    <MessageSquare size={18} />
+                    Email
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const text = `¡Únete a mi grupo en Alza! Mi código de invitación es: ${user.group.invite_code}`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+                    }}
+                    className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20"
+                  >
+                    <ChevronRight size={18} />
+                    WhatsApp
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setShowInviteModal(false)}
+                  className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm font-medium"
+                >
+                  Configurar más tarde
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Profile Modal */}
       <AnimatePresence>

@@ -72,11 +72,31 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    profile_image TEXT
+    profile_image TEXT,
+    account_mode TEXT DEFAULT 'individual',
+    theme_color TEXT DEFAULT 'default'
+  );
+
+  CREATE TABLE IF NOT EXISTS groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL, -- 'familiar', 'amigos'
+    created_by INTEGER,
+    invite_code TEXT UNIQUE,
+    FOREIGN KEY (created_by) REFERENCES users (id)
+  );
+
+  CREATE TABLE IF NOT EXISTS group_members (
+    group_id INTEGER,
+    user_id INTEGER,
+    role TEXT DEFAULT 'member',
+    PRIMARY KEY (group_id, user_id),
+    FOREIGN KEY (group_id) REFERENCES groups (id),
+    FOREIGN KEY (user_id) REFERENCES users (id)
   );
 `);
 
-// Migration: Add user_id if it doesn't exist
+// Migration: Add user_id and group_id if they don't exist
 const tables = ['expenses', 'recurring_expenses', 'goals', 'categories'];
 tables.forEach(table => {
   const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
@@ -86,6 +106,9 @@ tables.forEach(table => {
     } else {
       db.exec(`ALTER TABLE ${table} ADD COLUMN user_id INTEGER DEFAULT 1`);
     }
+  }
+  if (!tableInfo.find(col => col.name === 'group_id')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN group_id INTEGER DEFAULT NULL`);
   }
 });
 
@@ -200,14 +223,26 @@ async function startServer() {
     const mode = account_mode || 'individual';
     const theme = theme_color || 'default';
     try {
-      const result = db.prepare("INSERT INTO users (username, password, account_mode, theme_color) VALUES (?, ?, ?, ?)").run(username, hashedPassword, mode, theme);
-      const userId = result.lastInsertRowid as number;
+      db.transaction(() => {
+        const result = db.prepare("INSERT INTO users (username, password, account_mode, theme_color) VALUES (?, ?, ?, ?)").run(username, hashedPassword, mode, theme);
+        const userId = result.lastInsertRowid as number;
+        
+        // Auto-login after registration
+        req.session.userId = userId;
+        req.session.username = username;
+
+        // If not individual, create a group
+        if (mode !== 'individual') {
+          const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+          const groupName = mode === 'familiar' ? `Familia de ${username}` : `Amigos de ${username}`;
+          const groupResult = db.prepare("INSERT INTO groups (name, type, created_by, invite_code) VALUES (?, ?, ?, ?)").run(groupName, mode, userId, inviteCode);
+          const groupId = groupResult.lastInsertRowid as number;
+          db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)").run(groupId, userId, 'admin');
+        }
+      })();
       
-      // Auto-login after registration
-      req.session.userId = userId;
-      req.session.username = username;
-      
-      res.json({ id: userId, username, profile_image: null, account_mode: mode, theme_color: theme });
+      const user = db.prepare("SELECT id, username, profile_image, account_mode, theme_color FROM users WHERE id = ?").get(req.session.userId) as any;
+      res.json(user);
     } catch (err: any) {
       if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         res.status(400).json({ error: "El nombre de usuario ya existe" });
@@ -227,12 +262,52 @@ async function startServer() {
     if (req.session.userId) {
       const user = db.prepare("SELECT id, username, profile_image, account_mode, theme_color FROM users WHERE id = ?").get(req.session.userId) as any;
       if (user) {
+        // Get group info if exists
+        const group = db.prepare(`
+          SELECT g.* FROM groups g
+          JOIN group_members gm ON g.id = gm.group_id
+          WHERE gm.user_id = ?
+        `).get(user.id) as any;
+        
+        if (group) {
+          user.group = group;
+          // Get group members
+          user.group.members = db.prepare(`
+            SELECT u.id, u.username, u.profile_image, gm.role FROM users u
+            JOIN group_members gm ON u.id = gm.user_id
+            WHERE gm.group_id = ?
+          `).all(group.id);
+        }
+        
         res.json(user);
       } else {
         res.status(404).json({ error: "Usuario no encontrado" });
       }
     } else {
       res.status(401).json({ error: "No autenticado" });
+    }
+  });
+
+  app.post("/api/groups/join", isAuthenticated, (req, res) => {
+    const { invite_code } = req.body;
+    const userId = req.session.userId;
+
+    const group = db.prepare("SELECT * FROM groups WHERE invite_code = ?").get(invite_code) as any;
+    if (!group) {
+      return res.status(404).json({ error: "Código de invitación inválido" });
+    }
+
+    try {
+      db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)").run(group.id, userId, 'member');
+      // Update user account mode to match group type
+      db.prepare("UPDATE users SET account_mode = ? WHERE id = ?").run(group.type, userId);
+      res.json({ success: true, group });
+    } catch (err: any) {
+      if (err.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+        res.status(400).json({ error: "Ya eres miembro de este grupo" });
+      } else {
+        res.status(500).json({ error: "Error al unirse al grupo" });
+      }
     }
   });
 
@@ -427,15 +502,27 @@ async function startServer() {
 
   // API Routes
   app.get("/api/categories", isAuthenticated, (req, res) => {
-    const categories = db.prepare("SELECT * FROM categories WHERE user_id IS NULL OR user_id = ?").all(req.session.userId);
+    const userId = req.session.userId;
+    const categories = db.prepare(`
+      SELECT * FROM categories 
+      WHERE user_id IS NULL 
+      OR user_id = ? 
+      OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+    `).all(userId, userId);
     res.json(categories);
   });
 
   app.post("/api/categories", isAuthenticated, (req, res) => {
     const { name, icon, color } = req.body;
+    const userId = req.session.userId;
+    
+    // Get user's group if any
+    const group = db.prepare("SELECT group_id FROM group_members WHERE user_id = ?").get(userId) as any;
+    const groupId = group ? group.group_id : null;
+
     try {
-      const result = db.prepare("INSERT INTO categories (name, icon, color, user_id) VALUES (?, ?, ?, ?)")
-        .run(name, icon, color, req.session.userId);
+      const result = db.prepare("INSERT INTO categories (name, icon, color, user_id, group_id) VALUES (?, ?, ?, ?, ?)")
+        .run(name, icon, color, userId, groupId);
       res.json({ id: result.lastInsertRowid });
     } catch (error: any) {
       if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -447,83 +534,139 @@ async function startServer() {
   });
 
   app.get("/api/expenses", isAuthenticated, (req, res) => {
+    const userId = req.session.userId;
     const expenses = db.prepare(`
-      SELECT e.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
+      SELECT e.*, c.name as category_name, c.icon as category_icon, c.color as category_color,
+             u.username as author_name, u.profile_image as author_image
       FROM expenses e 
       LEFT JOIN categories c ON e.category_id = c.id
-      WHERE e.user_id = ?
+      LEFT JOIN users u ON e.user_id = u.id
+      WHERE e.user_id = ? OR e.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
       ORDER BY date DESC
-    `).all(req.session.userId);
+    `).all(userId, userId);
     res.json(expenses);
   });
 
   app.post("/api/expenses", isAuthenticated, (req, res) => {
     const { amount, description, date, category_id } = req.body;
-    const result = db.prepare("INSERT INTO expenses (amount, description, date, category_id, user_id) VALUES (?, ?, ?, ?, ?)")
-      .run(amount, description, date, category_id, req.session.userId);
+    const userId = req.session.userId;
+    
+    // Get user's group if any
+    const group = db.prepare("SELECT group_id FROM group_members WHERE user_id = ?").get(userId) as any;
+    const groupId = group ? group.group_id : null;
+
+    const result = db.prepare("INSERT INTO expenses (amount, description, date, category_id, user_id, group_id) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(amount, description, date, category_id, userId, groupId);
     res.json({ id: result.lastInsertRowid });
   });
 
   app.delete("/api/expenses/:id", isAuthenticated, (req, res) => {
-    db.prepare("DELETE FROM expenses WHERE id = ? AND user_id = ?").run(req.params.id, req.session.userId);
+    const userId = req.session.userId;
+    db.prepare(`
+      DELETE FROM expenses 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+    `).run(req.params.id, userId, userId);
     res.json({ success: true });
   });
 
   app.put("/api/expenses/:id", isAuthenticated, (req, res) => {
     const { amount, description, category_id, date } = req.body;
-    db.prepare("UPDATE expenses SET amount = ?, description = ?, category_id = ?, date = ? WHERE id = ? AND user_id = ?")
-      .run(amount, description, category_id, date, req.params.id, req.session.userId);
+    const userId = req.session.userId;
+    db.prepare(`
+      UPDATE expenses SET amount = ?, description = ?, category_id = ?, date = ? 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+    `).run(amount, description, category_id, date, req.params.id, userId, userId);
     res.json({ success: true });
   });
 
   app.get("/api/goals", isAuthenticated, (req, res) => {
-    const goals = db.prepare("SELECT * FROM goals WHERE user_id = ?").all(req.session.userId);
+    const userId = req.session.userId;
+    const goals = db.prepare(`
+      SELECT * FROM goals 
+      WHERE user_id = ? 
+      OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+    `).all(userId, userId);
     res.json(goals);
   });
 
   app.post("/api/goals", isAuthenticated, (req, res) => {
     const { name, target_amount, deadline } = req.body;
-    const result = db.prepare("INSERT INTO goals (name, target_amount, deadline, user_id) VALUES (?, ?, ?, ?)")
-      .run(name, target_amount, deadline, req.session.userId);
+    const userId = req.session.userId;
+    
+    // Get user's group if any
+    const group = db.prepare("SELECT group_id FROM group_members WHERE user_id = ?").get(userId) as any;
+    const groupId = group ? group.group_id : null;
+
+    const result = db.prepare("INSERT INTO goals (name, target_amount, deadline, user_id, group_id) VALUES (?, ?, ?, ?, ?)")
+      .run(name, target_amount, deadline, userId, groupId);
     res.json({ id: result.lastInsertRowid });
   });
 
   app.patch("/api/goals/:id", isAuthenticated, (req, res) => {
     const { current_amount } = req.body;
-    db.prepare("UPDATE goals SET current_amount = ? WHERE id = ? AND user_id = ?").run(current_amount, req.params.id, req.session.userId);
+    const userId = req.session.userId;
+    db.prepare(`
+      UPDATE goals SET current_amount = ? 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+    `).run(current_amount, req.params.id, userId, userId);
     res.json({ success: true });
   });
 
   app.delete("/api/goals/:id", isAuthenticated, (req, res) => {
-    db.prepare("DELETE FROM goals WHERE id = ? AND user_id = ?").run(req.params.id, req.session.userId);
+    const userId = req.session.userId;
+    db.prepare(`
+      DELETE FROM goals 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+    `).run(req.params.id, userId, userId);
     res.json({ success: true });
   });
 
   app.patch("/api/categories/:id/budget", isAuthenticated, (req, res) => {
     const { budget } = req.body;
-    db.prepare("UPDATE categories SET budget = ? WHERE id = ?").run(budget, req.params.id);
+    const userId = req.session.userId;
+    db.prepare(`
+      UPDATE categories SET budget = ? 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?) OR user_id IS NULL)
+    `).run(budget, req.params.id, userId, userId);
     res.json({ success: true });
   });
 
   app.get("/api/recurring", isAuthenticated, (req, res) => {
+    const userId = req.session.userId;
     const recurring = db.prepare(`
       SELECT r.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
       FROM recurring_expenses r 
       LEFT JOIN categories c ON r.category_id = c.id
-      WHERE r.user_id = ?
-    `).all(req.session.userId);
+      WHERE r.user_id = ? OR r.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+    `).all(userId, userId);
     res.json(recurring);
   });
 
   app.post("/api/recurring", isAuthenticated, (req, res) => {
     const { amount, description, category_id, frequency, next_date } = req.body;
-    const result = db.prepare("INSERT INTO recurring_expenses (amount, description, category_id, frequency, next_date, user_id) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(amount, description, category_id, frequency, next_date, req.session.userId);
+    const userId = req.session.userId;
+    
+    // Get user's group if any
+    const group = db.prepare("SELECT group_id FROM group_members WHERE user_id = ?").get(userId) as any;
+    const groupId = group ? group.group_id : null;
+
+    const result = db.prepare("INSERT INTO recurring_expenses (amount, description, category_id, frequency, next_date, user_id, group_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(amount, description, category_id, frequency, next_date, userId, groupId);
     res.json({ id: result.lastInsertRowid });
   });
 
   app.delete("/api/recurring/:id", isAuthenticated, (req, res) => {
-    db.prepare("DELETE FROM recurring_expenses WHERE id = ? AND user_id = ?").run(req.params.id, req.session.userId);
+    const userId = req.session.userId;
+    db.prepare(`
+      DELETE FROM recurring_expenses 
+      WHERE id = ? 
+      AND (user_id = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+    `).run(req.params.id, userId, userId);
     res.json({ success: true });
   });
 

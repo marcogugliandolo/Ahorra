@@ -22,6 +22,8 @@ export interface Expense {
   category_name: string;
   category_icon: string;
   category_color: string;
+  author_name?: string;
+  author_image?: string;
 }
 
 export interface RecurringExpense {
