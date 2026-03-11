@@ -814,6 +814,8 @@ async function startServer() {
         db.prepare("DELETE FROM recurring_expenses WHERE user_id = ?").run(userIdToDelete);
         db.prepare("DELETE FROM goals WHERE user_id = ?").run(userIdToDelete);
         db.prepare("DELETE FROM categories WHERE user_id = ?").run(userIdToDelete);
+        db.prepare("DELETE FROM group_members WHERE user_id = ?").run(userIdToDelete);
+        db.prepare("UPDATE groups SET created_by = NULL WHERE created_by = ?").run(userIdToDelete);
         db.prepare("DELETE FROM users WHERE id = ?").run(userIdToDelete);
       });
       
