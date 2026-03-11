@@ -237,12 +237,12 @@ async function startServer() {
   });
 
   app.post("/api/auth/register", (req, res) => {
-    const { username, password, account_mode, theme_color } = req.body;
+    const { username, password, account_mode, theme_color, invite_code } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: "Usuario y contraseña requeridos" });
     }
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const mode = account_mode || 'individual';
+    let mode = account_mode || 'individual';
     const theme = theme_color || 'default';
     try {
       let userId: number;
@@ -254,8 +254,16 @@ async function startServer() {
         req.session.userId = userId;
         req.session.username = username;
 
-        // If not individual, create a group
-        if (mode !== 'individual') {
+        // If invite code is provided, join that group instead of creating a new one
+        if (invite_code) {
+          const group = db.prepare("SELECT * FROM groups WHERE invite_code = ?").get(invite_code) as any;
+          if (group) {
+            db.prepare("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)").run(group.id, userId, 'member');
+            // Update user account mode to match group type
+            db.prepare("UPDATE users SET account_mode = ? WHERE id = ?").run(group.type, userId);
+          }
+        } else if (mode !== 'individual') {
+          // If not individual and no invite code, create a new group
           const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
           const groupName = mode === 'familiar' ? `Familia de ${username}` : `Amigos de ${username}`;
           const groupResult = db.prepare("INSERT INTO groups (name, type, created_by, invite_code) VALUES (?, ?, ?, ?)").run(groupName, mode, userId, inviteCode);
@@ -290,6 +298,15 @@ async function startServer() {
       }
     } else {
       res.status(401).json({ error: "No autenticado" });
+    }
+  });
+
+  app.get("/api/groups/validate/:code", (req, res) => {
+    const group = db.prepare("SELECT name, type FROM groups WHERE invite_code = ?").get(req.params.code) as any;
+    if (group) {
+      res.json({ valid: true, groupName: group.name, groupType: group.type });
+    } else {
+      res.status(404).json({ valid: false, error: "Código inválido" });
     }
   });
 

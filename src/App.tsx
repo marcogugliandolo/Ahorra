@@ -180,8 +180,23 @@ export default function App() {
   const [loginData, setLoginData] = useState({ username: '', password: '', account_mode: 'individual' });
   const [authError, setAuthError] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pending_invite_code');
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (pendingInviteCode) {
+      localStorage.setItem('pending_invite_code', pendingInviteCode);
+    } else {
+      localStorage.removeItem('pending_invite_code');
+    }
+  }, [pendingInviteCode]);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -389,6 +404,7 @@ export default function App() {
         console.log("Login successful, user data:", data);
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
+        setShowAuthModal(false);
       } else {
         const data = await res.json();
         console.log("Login failed, error:", data.error);
@@ -400,6 +416,33 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (user && pendingInviteCode && !isRegistering) {
+      const autoJoin = async () => {
+        try {
+          const res = await fetch('/api/groups/join', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ invite_code: pendingInviteCode })
+          });
+          if (res.ok) {
+            const meRes = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+            if (meRes.ok) {
+              const meData = await meRes.json();
+              setUser(meData);
+              localStorage.setItem('user', JSON.stringify(meData));
+            }
+          }
+        } catch (err) {
+          console.error("Auto-join failed:", err);
+        } finally {
+          setPendingInviteCode(null);
+        }
+      };
+      autoJoin();
+    }
+  }, [user, pendingInviteCode, isRegistering]);
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -409,16 +452,25 @@ export default function App() {
       return;
     }
     try {
+      const registrationData = { 
+        ...loginData, 
+        username: trimmedUsername,
+        invite_code: pendingInviteCode || undefined
+      };
+
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...loginData, username: trimmedUsername })
+        body: JSON.stringify(registrationData)
       });
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
-        if (data.account_mode !== 'individual' && data.group) {
+        setShowAuthModal(false); // Close modal if open
+        setPendingInviteCode(null); // Clear pending code
+        
+        if (!pendingInviteCode && data.account_mode !== 'individual' && data.group) {
           setShowInviteModal(true);
         }
       } else {
@@ -453,29 +505,52 @@ export default function App() {
   const handleJoinGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
-    try {
-      const res = await fetch('/api/groups/join', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ invite_code: joinCode })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Refresh user data
-        const meRes = await fetch('/api/auth/me', { headers: getAuthHeaders() });
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          setUser(meData);
-          localStorage.setItem('user', JSON.stringify(meData));
-          setIsJoining(false);
-          setJoinCode('');
+    
+    // If user is already logged in, join immediately
+    if (user) {
+      try {
+        const res = await fetch('/api/groups/join', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ invite_code: joinCode })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Refresh user data
+          const meRes = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+          if (meRes.ok) {
+            const meData = await meRes.json();
+            setUser(meData);
+            localStorage.setItem('user', JSON.stringify(meData));
+            setIsJoining(false);
+            setJoinCode('');
+          }
+        } else {
+          const data = await res.json();
+          setAuthError(data.error || 'Error al unirse al grupo');
         }
-      } else {
-        const data = await res.json();
-        setAuthError(data.error || 'Error al unirse al grupo');
+      } catch (error) {
+        setAuthError('Error de conexión');
       }
-    } catch (error) {
-      setAuthError('Error de conexión');
+    } else {
+      // If not logged in, validate code first
+      try {
+        const res = await fetch(`/api/groups/validate/${joinCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPendingInviteCode(joinCode);
+          setIsRegistering(true);
+          setIsJoining(false);
+          setLoginData(prev => ({ ...prev, account_mode: data.groupType }));
+          setShowAuthModal(true); // Open the modal
+          setAuthError(`Código válido para "${data.groupName}". Regístrate para unirte.`);
+        } else {
+          const data = await res.json();
+          setAuthError(data.error || 'Código de invitación inválido');
+        }
+      } catch (error) {
+        setAuthError('Error de conexión');
+      }
     }
   };
 
@@ -1038,6 +1113,35 @@ export default function App() {
                     : 'Gestiona tus finanzas con inteligencia y toma el control de tu futuro.'}
                 </p>
               </div>
+
+              {pendingInviteCode && isRegistering && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-emerald-50 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 mb-8"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
+                      <Sparkles size={16} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+                        Invitación detectada
+                      </p>
+                      <p className="text-emerald-600/80 dark:text-emerald-400/80 text-xs">
+                        Te unirás automáticamente al grupo con el código <span className="font-mono font-black">{pendingInviteCode}</span> tras registrarte.
+                      </p>
+                      <button 
+                        type="button"
+                        onClick={() => setPendingInviteCode(null)}
+                        className="text-[10px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 underline mt-2 uppercase tracking-widest font-bold"
+                      >
+                        Ignorar invitación
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
               <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-6">
                 <div className="space-y-2">
@@ -1903,6 +2007,34 @@ export default function App() {
                       <TrendingDown size={16} />
                     </div>
                   </div>
+
+                  {user?.account_mode !== 'individual' && user?.group && (
+                    <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-2xl border border-emerald-100/50 dark:border-emerald-900/20">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Miembros del Grupo</h4>
+                        <span className="text-[10px] font-bold text-stone-400">{user.group.members?.length || 0}</span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {user.group.members?.map((member: any) => (
+                          <div key={member.id} className="flex items-center gap-2 group/member">
+                            <div className="w-6 h-6 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden ring-2 ring-white dark:ring-stone-900 shadow-sm">
+                              {member.profile_image ? (
+                                <img src={member.profile_image} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-stone-400">
+                                  <UserIcon size={10} />
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-xs font-bold text-stone-700 dark:text-stone-300 truncate flex-1">{member.username}</span>
+                            {member.role === 'admin' && (
+                              <span className="text-[8px] font-black bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Admin</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="flex gap-2">
                     <select 
@@ -2809,6 +2941,128 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Auth Modal (for joining groups) */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAuthModal(false)}
+              className="absolute inset-0 bg-stone-900/60 dark:bg-stone-950/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={cn(
+                "relative bg-white dark:bg-stone-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden",
+                isRegistering && loginData.account_mode === 'familiar' && "theme-familiar",
+                isRegistering && loginData.account_mode === 'amigos' && "theme-amigos"
+              )}
+            >
+              <div className="p-8 sm:p-12">
+                <button 
+                  onClick={() => setShowAuthModal(false)}
+                  className="absolute top-6 right-6 p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="p-2.5 bg-emerald-600 rounded-xl text-white shadow-lg">
+                    <Mountain size={20} />
+                  </div>
+                  <span className="text-lg font-black tracking-tight text-stone-900 dark:text-stone-100">Alza</span>
+                </div>
+
+                <div className="mb-8">
+                  <h2 className="text-3xl font-black tracking-tight text-stone-900 dark:text-stone-100 mb-2">
+                    {isRegistering ? 'Crea tu cuenta.' : 'Inicia sesión.'}
+                  </h2>
+                  <p className="text-stone-500 dark:text-stone-400 text-sm">
+                    {isRegistering 
+                      ? 'Regístrate para unirte al grupo y empezar a compartir.' 
+                      : 'Accede a tu cuenta para continuar.'}
+                  </p>
+                </div>
+
+                {pendingInviteCode && isRegistering && (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 mb-6">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
+                        <Sparkles size={14} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-emerald-700 dark:text-emerald-300 text-xs font-bold">Invitación detectada</p>
+                        <p className="text-emerald-600/80 dark:text-emerald-400/80 text-[10px]">
+                          Te unirás al grupo con el código <span className="font-mono font-black">{pendingInviteCode}</span> tras registrarte.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-stone-400 dark:text-stone-500 uppercase tracking-widest ml-1">Usuario</label>
+                    <div className="relative group">
+                      <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                      <input 
+                        type="text"
+                        required
+                        value={loginData.username}
+                        onChange={e => setLoginData({...loginData, username: e.target.value})}
+                        placeholder="Tu nombre de usuario"
+                        className="w-full bg-stone-50 dark:bg-stone-950 border-2 border-transparent focus:border-emerald-500 rounded-2xl py-3.5 pl-11 pr-4 text-stone-900 dark:text-stone-100 transition-all text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-stone-400 dark:text-stone-500 uppercase tracking-widest ml-1">Contraseña</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                      <input 
+                        type="password"
+                        required
+                        value={loginData.password}
+                        onChange={e => setLoginData({...loginData, password: e.target.value})}
+                        placeholder="••••••••"
+                        className="w-full bg-stone-50 dark:bg-stone-950 border-2 border-transparent focus:border-emerald-500 rounded-2xl py-3.5 pl-11 pr-4 text-stone-900 dark:text-stone-100 transition-all text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {authError && (
+                    <div className="text-red-500 text-xs font-bold bg-red-50 dark:bg-red-950/30 p-3 rounded-xl border border-red-100 dark:border-red-900/50">
+                      {authError}
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold shadow-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
+                  >
+                    {isRegistering ? 'Registrarse' : 'Iniciar Sesión'}
+                    <ArrowRight size={18} />
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => setIsRegistering(!isRegistering)}
+                    className="w-full text-center text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-bold transition-colors mt-4"
+                  >
+                    {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                  </button>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}
